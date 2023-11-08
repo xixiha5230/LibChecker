@@ -22,6 +22,7 @@ import com.absinthe.libchecker.features.applist.ui.AdvancedMenuBSDFragment
 import com.absinthe.libchecker.features.chart.ui.ChartActivity
 import com.absinthe.libchecker.features.home.HomeViewModel
 import com.absinthe.libchecker.features.home.INavViewContainer
+import com.absinthe.libchecker.features.statistics.bean.LibChip
 import com.absinthe.libchecker.features.statistics.bean.LibReference
 import com.absinthe.libchecker.features.statistics.ui.adapter.LibReferenceAdapter
 import com.absinthe.libchecker.features.statistics.ui.adapter.RefListDiffUtil
@@ -300,14 +301,52 @@ class LibReferenceFragment :
       searchUpdateJob?.cancel()
       searchUpdateJob = lifecycleScope.launch(Dispatchers.IO) {
         homeViewModel.savedRefList?.let { list ->
-          val filter = list.filter {
-            it.libName.contains(newText, ignoreCase = true) || it.chip?.name?.contains(
-              newText,
-              ignoreCase = true
-            ) ?: false
+          var filter = list
+          if (newText.isNotEmpty() && newText[0] == '@') {
+            val text = newText.replace("@", "")
+            if (text.contains("-")) {
+              val text0 = text.split("-")[0]
+              val text1 = text.split("-")[1]
+              if (text0.isNotEmpty() && text1.isNotEmpty()) {
+                val firstList = list.filter {
+                  it.chip?.name?.equals(
+                    text0,
+                    ignoreCase = true
+                  ) ?: false
+                }
+                val secondList = list.filter {
+                  it.chip?.name?.equals(
+                    text1,
+                    ignoreCase = true
+                  ) ?: false
+                }
+                if (firstList.isNotEmpty() && secondList.isNotEmpty()) {
+                  val firstRef = firstList[0]
+                  val items =
+                    firstRef.referredList.minus(secondList.flatMap { it.referredList }.toSet())
+                  val newLibChip =
+                    firstRef.chip?.let { LibChip(it.iconRes, "$text0 - $text1") }
+                  filter = mutableListOf(
+                    LibReference(
+                      "$text0 - $text1",
+                      newLibChip,
+                      items,
+                      firstRef.type,
+                      firstRef.childNode
+                    )
+                  )
+                }
+              }
+            }
+          } else {
+            filter = list.filter {
+              it.libName.contains(newText, ignoreCase = true) || it.chip?.name?.contains(
+                newText,
+                ignoreCase = true
+              ) ?: false
+            }
+            LibReferenceAdapter.highlightText = newText
           }
-          LibReferenceAdapter.highlightText = newText
-
           withContext(Dispatchers.Main) {
             if (isFragmentVisible()) {
               (activity as? INavViewContainer)?.showProgressBar()
